@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions, TextInput } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/firebaseConfig';
+import { db, auth } from '@/firebaseConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { updateProfile, signOut } from 'firebase/auth';
+import { router } from 'expo-router';
 
 interface VideoItem {
   id: string;
@@ -96,8 +98,17 @@ export default function ProfileScreen() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const { user } = useAuth();
   const colorScheme = useColorScheme() as ColorScheme;
+
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchUserVideos = async () => {
@@ -132,6 +143,28 @@ export default function ProfileScreen() {
     fetchUserVideos();
   }, [user]);
 
+  const handleUpdateDisplayName = async () => {
+    if (!user) return;
+    
+    try {
+      setUpdateError(null);
+      await updateProfile(user, { displayName });
+      setIsEditingName(false);
+    } catch (error) {
+      console.error('Error updating display name:', error);
+      setUpdateError('Failed to update display name');
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      router.replace('/(auth)');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   const renderVideoThumbnail = ({ item }: { item: VideoItem }) => (
     <VideoThumbnail
       item={item}
@@ -151,10 +184,77 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.profileSection}>
-        <Text style={[styles.header, { color: Colors[colorScheme].text }]}>
-          Profile Section
-        </Text>
-        {/* Add profile content here */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
+            <IconSymbol 
+              name="person.crop.circle.fill" 
+              size={80} 
+              color={Colors[colorScheme].text} 
+            />
+          </View>
+          
+          <View style={styles.nameSection}>
+            {isEditingName ? (
+              <View style={styles.editNameContainer}>
+                <TextInput
+                  style={[styles.nameInput, { 
+                    color: Colors[colorScheme].text,
+                    borderColor: Colors[colorScheme].border 
+                  }]}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="Enter display name"
+                  placeholderTextColor={Colors[colorScheme].tabIconDefault}
+                  autoFocus
+                />
+                <View style={styles.editNameButtons}>
+                  <Button 
+                    title="Save" 
+                    onPress={handleUpdateDisplayName} 
+                  />
+                  <Button 
+                    title="Cancel" 
+                    onPress={() => {
+                      setIsEditingName(false);
+                      setDisplayName(user?.displayName || '');
+                    }} 
+                  />
+                </View>
+              </View>
+            ) : (
+              <Pressable 
+                style={styles.displayNameContainer} 
+                onPress={() => setIsEditingName(true)}
+              >
+                <Text style={[styles.displayName, { color: Colors[colorScheme].text }]}>
+                  {user?.displayName || 'Set display name'}
+                </Text>
+                <IconSymbol 
+                  name="pencil.circle.fill" 
+                  size={24} 
+                  color={Colors[colorScheme].text} 
+                />
+              </Pressable>
+            )}
+            
+            {updateError && (
+              <Text style={[styles.errorText, { color: Colors[colorScheme].error }]}>
+                {updateError}
+              </Text>
+            )}
+            
+            <Text style={[styles.email, { color: Colors[colorScheme].tabIconDefault }]}>
+              {user?.email}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.profileActions}>
+          <Button 
+            title="Sign Out" 
+            onPress={handleSignOut}
+          />
+        </View>
       </View>
       
       <View style={styles.videosSection}>
@@ -270,5 +370,53 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarContainer: {
+    marginRight: 16,
+  },
+  nameSection: {
+    flex: 1,
+  },
+  displayNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  displayName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  email: {
+    fontSize: 16,
+  },
+  editNameContainer: {
+    marginBottom: 8,
+  },
+  nameInput: {
+    fontSize: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  editNameButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  profileActions: {
+    marginTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
   },
 }); 
