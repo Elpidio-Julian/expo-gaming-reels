@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions, TextInput } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions, TextInput, Modal } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -31,6 +31,8 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
   onClose: () => void;
 }) => {
   const videoSource = item.originalUrl;
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const { user } = useAuth();
   console.log('Video source:', videoSource);
 
   const player = useVideoPlayer(videoSource, player => {
@@ -39,6 +41,35 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
   });
 
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+
+  const handleDefaultProcessing = () => {
+    if (!user) return;
+    
+    // Send the default processing request
+    const request = {
+      videoUrl: item.originalUrl,
+      videoId: item.videoId,
+      userId: user.uid
+    };
+    
+    console.log('Sending default processing request:', request);
+    // TODO: Implement the API call to send the request
+  };
+
+  const handleCustomProcessing = (prompt: string) => {
+    if (!user) return;
+    
+    // Send the custom processing request with prompt
+    const request = {
+      videoUrl: item.originalUrl,
+      videoId: item.videoId,
+      userId: user.uid,
+      prompt
+    };
+    
+    console.log('Sending custom processing request:', request);
+    // TODO: Implement the API call to send the request
+  };
 
   return (
     <View style={styles.videoPlayerOverlay}>
@@ -70,9 +101,89 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
               }
             }}
           />
+          <View style={styles.processingControls}>
+            <Pressable
+              style={[styles.actionButton, { backgroundColor: Colors[colorScheme].tint }]}
+              onPress={handleDefaultProcessing}
+            >
+              <Text style={styles.actionButtonText}>Process</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, { backgroundColor: Colors[colorScheme].tint }]}
+              onPress={() => setShowProcessingModal(true)}
+            >
+              <Text style={styles.actionButtonText}>Custom Process</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
+      <VideoProcessingModal
+        isVisible={showProcessingModal}
+        onClose={() => setShowProcessingModal(false)}
+        onSubmit={handleCustomProcessing}
+        colorScheme={colorScheme}
+      />
     </View>
+  );
+};
+
+interface VideoProcessingModalProps {
+  isVisible: boolean;
+  onClose: () => void;
+  onSubmit: (prompt: string) => void;
+  colorScheme: ColorScheme;
+}
+
+const VideoProcessingModal = ({ isVisible, onClose, onSubmit, colorScheme }: VideoProcessingModalProps) => {
+  const [prompt, setPrompt] = useState('');
+
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { backgroundColor: Colors[colorScheme].background }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: Colors[colorScheme].text }]}>
+              Enter Processing Instructions
+            </Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <IconSymbol name="xmark.circle.fill" size={24} color={Colors[colorScheme].text} />
+            </Pressable>
+          </View>
+          <TextInput
+            style={[
+              styles.promptInput,
+              {
+                color: Colors[colorScheme].text,
+                borderColor: Colors[colorScheme].border,
+                backgroundColor: Colors[colorScheme].background
+              }
+            ]}
+            placeholder="Enter your instructions for the video processing agent..."
+            placeholderTextColor={Colors[colorScheme].tabIconDefault}
+            value={prompt}
+            onChangeText={setPrompt}
+            multiline
+            numberOfLines={4}
+          />
+          <View style={styles.modalActions}>
+            <Button title="Cancel" onPress={onClose} />
+            <Button
+              title="Submit"
+              onPress={() => {
+                onSubmit(prompt);
+                setPrompt('');
+                onClose();
+              }}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -80,19 +191,21 @@ const VideoThumbnail = ({ item, onSelect, colorScheme }: {
   item: VideoItem; 
   onSelect: () => void;
   colorScheme: ColorScheme;
-}) => (
-  <Pressable onPress={onSelect} style={styles.thumbnailContainer}>
-    <View style={styles.thumbnail}>
-      <IconSymbol name="play.circle.fill" size={32} color={Colors[colorScheme].text} />
+}) => {
+  return (
+    <View style={styles.thumbnailContainer}>
+      <Pressable onPress={onSelect} style={styles.thumbnail}>
+        <IconSymbol name="play.circle.fill" size={32} color={Colors[colorScheme].text} />
+      </Pressable>
+      <Text 
+        numberOfLines={1} 
+        style={[styles.thumbnailTitle, { color: Colors[colorScheme].text }]}
+      >
+        {item.filename}
+      </Text>
     </View>
-    <Text 
-      numberOfLines={1} 
-      style={[styles.thumbnailTitle, { color: Colors[colorScheme].text }]}
-    >
-      {item.filename}
-    </Text>
-  </Pressable>
-);
+  );
+};
 
 export default function ProfileScreen() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -356,7 +469,7 @@ const styles = StyleSheet.create({
   },
   videoControls: {
     padding: 12,
-    alignItems: 'center',
+    gap: 12,
   },
   closeButton: {
     padding: 4,
@@ -418,5 +531,61 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 12,
+    padding: 16,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  promptInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    textAlignVertical: 'top',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  processingControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 }); 
