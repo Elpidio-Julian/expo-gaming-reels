@@ -32,6 +32,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# local env files
+.env
+
 # typescript
 *.tsbuildinfo
 
@@ -41,3 +44,5 @@ firebaseConfig.ts
 
 package-lock.json
 .cursor/
+
+plan.md

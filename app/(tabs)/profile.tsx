@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions, TextInput, Modal } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions, TextInput, Modal, Alert } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -8,8 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { updateProfile, signOut } from 'firebase/auth';
+import { updateProfile, signOut, getIdToken } from 'firebase/auth';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 
 interface VideoItem {
   id: string;
@@ -32,6 +33,7 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
 }) => {
   const videoSource = item.originalUrl;
   const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
   console.log('Video source:', videoSource);
 
@@ -42,33 +44,94 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
 
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
 
-  const handleDefaultProcessing = () => {
+  const handleDefaultProcessing = async () => {
     if (!user) return;
     
-    // Send the default processing request
-    const request = {
-      videoUrl: item.originalUrl,
-      videoId: item.videoId,
-      userId: user.uid
-    };
-    
-    console.log('Sending default processing request:', request);
-    // TODO: Implement the API call to send the request
+    try {
+      setIsProcessing(true);
+      const idToken = await getIdToken(user);
+      const apiUrl = process.env.EXPO_PUBLIC_FASTAPI_URL;
+      
+      console.log('Attempting to connect to:', `${apiUrl}/api/v1/videos/process`);
+      console.log('With token:', idToken.substring(0, 10) + '...');
+      
+      const response = await fetch(`${apiUrl}/api/v1/videos/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          videoUrl: item.originalUrl,
+          videoId: item.videoId,
+          userId: user.uid
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Processing request sent successfully:', result);
+      Alert.alert('Success', 'Video has been sent for processing');
+      
+    } catch (error) {
+      console.error('Error sending processing request:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        Alert.alert('Error', `Failed to send video for processing: ${error.message}`);
+      } else {
+        Alert.alert('Error', 'Failed to send video for processing');
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleCustomProcessing = (prompt: string) => {
+  const handleCustomProcessing = async (prompt: string) => {
     if (!user) return;
     
-    // Send the custom processing request with prompt
-    const request = {
-      videoUrl: item.originalUrl,
-      videoId: item.videoId,
-      userId: user.uid,
-      prompt
-    };
-    
-    console.log('Sending custom processing request:', request);
-    // TODO: Implement the API call to send the request
+    try {
+      setIsProcessing(true);
+      const idToken = await getIdToken(user);
+      const apiUrl = process.env.EXPO_PUBLIC_FASTAPI_URL;
+      
+      console.log('Attempting to connect to:', `${apiUrl}/api/v1/videos/process`);
+      console.log('With token:', idToken.substring(0, 10) + '...');
+
+      const response = await fetch(`${apiUrl}/api/v1/videos/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          videoUrl: item.originalUrl,
+          videoId: item.videoId,
+          userId: user.uid,
+          prompt
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Custom processing request sent successfully:', result);
+      Alert.alert('Success', 'Video has been sent for processing with custom instructions');
+      
+    } catch (error) {
+      console.error('Error sending custom processing request:', error);
+      Alert.alert('Error', 'Failed to send video for custom processing');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -103,16 +166,34 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
           />
           <View style={styles.processingControls}>
             <Pressable
-              style={[styles.actionButton, { backgroundColor: Colors[colorScheme].tint }]}
+              style={[
+                styles.actionButton,
+                { 
+                  backgroundColor: Colors[colorScheme].tint,
+                  opacity: isProcessing ? 0.5 : 1 
+                }
+              ]}
               onPress={handleDefaultProcessing}
+              disabled={isProcessing}
             >
-              <Text style={styles.actionButtonText}>Process</Text>
+              <Text style={styles.actionButtonText}>
+                {isProcessing ? 'Processing...' : 'Process'}
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.actionButton, { backgroundColor: Colors[colorScheme].tint }]}
+              style={[
+                styles.actionButton,
+                { 
+                  backgroundColor: Colors[colorScheme].tint,
+                  opacity: isProcessing ? 0.5 : 1 
+                }
+              ]}
               onPress={() => setShowProcessingModal(true)}
+              disabled={isProcessing}
             >
-              <Text style={styles.actionButtonText}>Custom Process</Text>
+              <Text style={styles.actionButtonText}>
+                {isProcessing ? 'Processing...' : 'Custom Process'}
+              </Text>
             </Pressable>
           </View>
         </View>
