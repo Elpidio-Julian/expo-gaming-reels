@@ -16,6 +16,7 @@ interface VideoItem {
   id: string;
   title?: string;
   originalUrl: string;
+  processedUrl?: string;
   timestamp?: any;
   status: string;
   videoId: string;
@@ -25,16 +26,19 @@ interface VideoItem {
 }
 
 type ColorScheme = 'light' | 'dark';
+type VideoViewMode = 'original' | 'processed';
 
-const VideoPlayer = ({ item, colorScheme, onClose }: { 
+const VideoPlayer = ({ item, colorScheme, onClose, viewMode }: { 
   item: VideoItem; 
   colorScheme: ColorScheme;
   onClose: () => void;
+  viewMode: VideoViewMode;
 }) => {
   const videoSource = item.originalUrl;
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
+  const isProcessed = !!item.processedUrl;
   console.log('Video source:', videoSource);
 
   const player = useVideoPlayer(videoSource, player => {
@@ -164,38 +168,40 @@ const VideoPlayer = ({ item, colorScheme, onClose }: {
               }
             }}
           />
-          <View style={styles.processingControls}>
-            <Pressable
-              style={[
-                styles.actionButton,
-                { 
-                  backgroundColor: Colors[colorScheme].tint,
-                  opacity: isProcessing ? 0.5 : 1 
-                }
-              ]}
-              onPress={handleDefaultProcessing}
-              disabled={isProcessing}
-            >
-              <Text style={styles.actionButtonText}>
-                {isProcessing ? 'Processing...' : 'Process'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.actionButton,
-                { 
-                  backgroundColor: Colors[colorScheme].tint,
-                  opacity: isProcessing ? 0.5 : 1 
-                }
-              ]}
-              onPress={() => setShowProcessingModal(true)}
-              disabled={isProcessing}
-            >
-              <Text style={styles.actionButtonText}>
-                {isProcessing ? 'Processing...' : 'Custom Process'}
-              </Text>
-            </Pressable>
-          </View>
+          {viewMode === 'original' && (
+            <View style={styles.processingControls}>
+              <Pressable
+                style={[
+                  styles.actionButton,
+                  { 
+                    backgroundColor: Colors[colorScheme].tint,
+                    opacity: isProcessing ? 0.5 : 1 
+                  }
+                ]}
+                onPress={handleDefaultProcessing}
+                disabled={isProcessing}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isProcessing ? 'Processing...' : 'Process'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.actionButton,
+                  { 
+                    backgroundColor: Colors[colorScheme].tint,
+                    opacity: isProcessing ? 0.5 : 1 
+                  }
+                ]}
+                onPress={() => setShowProcessingModal(true)}
+                disabled={isProcessing}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isProcessing ? 'Processing...' : 'Custom Process'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
       <VideoProcessingModal
@@ -268,15 +274,38 @@ const VideoProcessingModal = ({ isVisible, onClose, onSubmit, colorScheme }: Vid
   );
 };
 
-const VideoThumbnail = ({ item, onSelect, colorScheme }: { 
+const VideoThumbnail = ({ item, onSelect, colorScheme, viewMode }: { 
   item: VideoItem; 
   onSelect: () => void;
   colorScheme: ColorScheme;
+  viewMode: VideoViewMode;
 }) => {
+  const hasProcessedVersion = !!item.processedUrl;
+  const isProcessedView = viewMode === 'processed';
+
   return (
     <View style={styles.thumbnailContainer}>
-      <Pressable onPress={onSelect} style={styles.thumbnail}>
-        <IconSymbol name="play.circle.fill" size={32} color={Colors[colorScheme].text} />
+      <Pressable 
+        onPress={onSelect} 
+        style={[
+          styles.thumbnail,
+          !hasProcessedVersion && isProcessedView && styles.thumbnailDisabled
+        ]}
+        disabled={isProcessedView && !hasProcessedVersion}
+      >
+        <IconSymbol 
+          name="play.circle.fill" 
+          size={32} 
+          color={(!hasProcessedVersion && isProcessedView) 
+            ? Colors[colorScheme].tabIconDefault 
+            : Colors[colorScheme].text
+          } 
+        />
+        {isProcessedView && !hasProcessedVersion && (
+          <Text style={[styles.processingStatus, { color: Colors[colorScheme].tabIconDefault }]}>
+            Processing
+          </Text>
+        )}
       </Pressable>
       <Text 
         numberOfLines={1} 
@@ -291,6 +320,7 @@ const VideoThumbnail = ({ item, onSelect, colorScheme }: {
 export default function ProfileScreen() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+  const [viewMode, setViewMode] = useState<VideoViewMode>('original');
   const [loading, setLoading] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -362,8 +392,16 @@ export default function ProfileScreen() {
   const renderVideoThumbnail = ({ item }: { item: VideoItem }) => (
     <VideoThumbnail
       item={item}
-      onSelect={() => setSelectedVideo(item)}
+      onSelect={() => {
+        // Only select if we have a URL for the current view mode
+        if (viewMode === 'processed' && !item.processedUrl) return;
+        setSelectedVideo({
+          ...item,
+          originalUrl: viewMode === 'processed' && item.processedUrl ? item.processedUrl : item.originalUrl
+        });
+      }}
       colorScheme={colorScheme}
+      viewMode={viewMode}
     />
   );
 
@@ -452,9 +490,47 @@ export default function ProfileScreen() {
       </View>
       
       <View style={styles.videosSection}>
-        <Text style={[styles.subheader, { color: Colors[colorScheme].text }]}>
-          My Videos ({videos.length})
-        </Text>
+        <View style={styles.videosSectionHeader}>
+          <Text style={[styles.subheader, { color: Colors[colorScheme].text }]}>
+            My Videos ({videos.length})
+          </Text>
+          <View style={styles.viewModeToggle}>
+            <Pressable
+              style={[
+                styles.viewModeButton,
+                viewMode === 'original' && styles.viewModeButtonActive,
+                { borderColor: Colors[colorScheme].tint }
+              ]}
+              onPress={() => setViewMode('original')}
+            >
+              <Text 
+                style={[
+                  styles.viewModeButtonText,
+                  viewMode === 'original' && { color: Colors[colorScheme].tint }
+                ]}
+              >
+                Original
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.viewModeButton,
+                viewMode === 'processed' && styles.viewModeButtonActive,
+                { borderColor: Colors[colorScheme].tint }
+              ]}
+              onPress={() => setViewMode('processed')}
+            >
+              <Text 
+                style={[
+                  styles.viewModeButtonText,
+                  viewMode === 'processed' && { color: Colors[colorScheme].tint }
+                ]}
+              >
+                Processed
+              </Text>
+            </Pressable>
+          </View>
+        </View>
         <FlatList
           data={videos}
           renderItem={renderVideoThumbnail}
@@ -470,6 +546,7 @@ export default function ProfileScreen() {
           item={selectedVideo}
           colorScheme={colorScheme}
           onClose={() => setSelectedVideo(null)}
+          viewMode={viewMode}
         />
       )}
     </View>
@@ -668,5 +745,39 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.25)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  videosSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  viewModeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderRadius: 6,
+    marginHorizontal: 4,
+  },
+  viewModeButtonActive: {
+    backgroundColor: '#ffffff10',
+  },
+  viewModeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  thumbnailDisabled: {
+    opacity: 0.5,
+  },
+  processingStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
   },
 }); 

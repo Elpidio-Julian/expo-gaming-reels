@@ -1,109 +1,203 @@
-import { StyleSheet, Image, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, Dimensions, FlatList, Text, ViewToken } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEvent } from 'expo';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/firebaseConfig';
+import { Colors } from '@/constants/Colors';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { useFocusEffect } from 'expo-router';
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+interface ProcessedVideo {
+  id: string;
+  processedUrl: string;
+  title?: string;
+  userId: string;
+  filename: string;
+  createdAt: any;
+}
 
-export default function TabTwoScreen() {
+const VideoItem = ({ item, isVisible, isFocused }: { 
+  item: ProcessedVideo; 
+  isVisible: boolean;
+  isFocused: boolean;
+}) => {
+  const colorScheme = useColorScheme();
+  const player = useVideoPlayer(item.processedUrl, player => {
+    player.loop = true;
+    if (isVisible && isFocused) {
+      player.play();
+    }
+  });
+
+  useEffect(() => {
+    if (isVisible && isFocused) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isVisible, isFocused, player]);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
+    <View style={styles.videoContainer}>
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      <View style={styles.videoInfo}>
+        <Text style={[styles.videoTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+          {item.filename}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+export default function ExploreScreen() {
+  const [videos, setVideos] = useState<ProcessedVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const flatListRef = useRef<FlatList>(null);
+  const colorScheme = useColorScheme();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    const fetchProcessedVideos = async () => {
+      try {
+        const videosRef = collection(db, 'videos');
+        const q = query(videosRef, where('processedUrl', '!=', null));
+        const querySnapshot = await getDocs(q);
+        
+        const processedVideos: ProcessedVideo[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.processedUrl) {
+            processedVideos.push({
+              id: doc.id,
+              processedUrl: data.processedUrl,
+              title: data.title,
+              userId: data.userId,
+              filename: data.filename,
+              createdAt: data.createdAt,
+            });
+          }
+        });
+
+        // Sort by most recent
+        processedVideos.sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis());
+        setVideos(processedVideos);
+      } catch (error) {
+        console.error('Error fetching processed videos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProcessedVideos();
+  }, []);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }).current;
+
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50
+  };
+
+  const renderItem = ({ item, index }: { item: ProcessedVideo; index: number }) => (
+    <VideoItem 
+      item={item} 
+      isVisible={index === currentIndex} 
+      isFocused={isScreenFocused}
+    />
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.loadingText, { color: Colors[colorScheme ?? 'light'].text }]}>
+          Loading videos...
+        </Text>
+      </View>
+    );
+  }
+
+  if (videos.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.loadingText, { color: Colors[colorScheme ?? 'light'].text }]}>
+          No processed videos available
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={videos}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        initialNumToRender={2}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        getItemLayout={(data, index) => ({
+          length: Dimensions.get('window').height,
+          offset: Dimensions.get('window').height * index,
+          index,
         })}
-      </Collapsible>
-    </ParallaxScrollView>
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  videoContainer: {
+    height: Dimensions.get('window').height,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  video: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  videoInfo: {
+    position: 'absolute',
+    bottom: 80,
+    left: 20,
+    right: 20,
+  },
+  videoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  loadingText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
   },
 });

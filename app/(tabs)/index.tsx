@@ -1,53 +1,75 @@
 import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
+import { useAuth } from '@/contexts/AuthContext';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
       headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+        <IconSymbol 
+          name="play.circle.fill" 
+          size={120} 
+          color="#ffffff" 
+          style={styles.appLogo}
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+        <ThemedText type="title">Welcome{user?.displayName ? `, ${user.displayName}` : ''}!</ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
+
+      <ThemedView style={styles.sectionContainer}>
+        <ThemedText type="subtitle">About Video Processing App</ThemedText>
         <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
+          Transform and enhance your videos with our powerful AI-driven processing tools. Upload, process, and share your creative content all in one place.
         </ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app. Really
-        </ThemedText>
+
+      <ThemedView style={styles.featureContainer}>
+        <ThemedText type="subtitle">Key Features</ThemedText>
+        
+        <ThemedView style={styles.feature}>
+          <IconSymbol name="arrow.up.circle.fill" size={24} color="#A1CEDC" />
+          <ThemedText type="defaultSemiBold">Upload Videos</ThemedText>
+          <ThemedText>
+            Easily upload your videos from your device in the Upload tab.
+          </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.feature}>
+          <IconSymbol name="wand.and.stars" size={24} color="#A1CEDC" />
+          <ThemedText type="defaultSemiBold">Process with AI</ThemedText>
+          <ThemedText>
+            Apply AI-powered processing to your videos with custom instructions or use our default processing.
+          </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.feature}>
+          <IconSymbol name="person.crop.circle" size={24} color="#A1CEDC" />
+          <ThemedText type="defaultSemiBold">Manage Your Content</ThemedText>
+          <ThemedText>
+            View and manage your videos in the Profile tab. Toggle between original and processed versions.
+          </ThemedText>
+        </ThemedView>
+
+        <ThemedView style={styles.feature}>
+          <IconSymbol name="safari" size={24} color="#A1CEDC" />
+          <ThemedText type="defaultSemiBold">Explore</ThemedText>
+          <ThemedText>
+            Discover processed videos from the community in a TikTok-style feed in the Explore tab.
+          </ThemedText>
+        </ThemedView>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
+
+      <ThemedView style={styles.getStartedContainer}>
+        <ThemedText type="subtitle">Get Started</ThemedText>
         <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
+          Head to the Upload tab to start processing your first video, or check out the Explore tab to see what others have created!
         </ThemedText>
       </ThemedView>
     </ParallaxScrollView>
@@ -56,19 +78,38 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   titleContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 24,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  sectionContainer: {
+    gap: 12,
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#ffffff10',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  featureContainer: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  feature: {
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#ffffff10',
+  },
+  getStartedContainer: {
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#ffffff10',
+    marginBottom: 24,
+  },
+  appLogo: {
+    height: 120,
+    width: 120,
+    bottom: 20,
+    alignSelf: 'center',
     position: 'absolute',
   },
 });
