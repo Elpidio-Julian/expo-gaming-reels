@@ -40,3 +40,4 @@ app-example
 firebaseConfig.ts
 
 package-lock.json
+.cursor/
