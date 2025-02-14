@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Button, Pressable, Image, Dimensions } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -7,6 +7,7 @@ import { db } from '@/firebaseConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 interface VideoItem {
   id: string;
@@ -22,14 +23,13 @@ interface VideoItem {
 
 type ColorScheme = 'light' | 'dark';
 
-const VideoItemComponent = ({ item, colorScheme }: { item: VideoItem; colorScheme: ColorScheme }) => {
-  // Add detailed logging
-  console.log('VideoItemComponent - Full item:', item);
-  console.log('VideoItemComponent - URL:', item.originalUrl);
-  
-  // Create a video source from the URL
+const VideoPlayer = ({ item, colorScheme, onClose }: { 
+  item: VideoItem; 
+  colorScheme: ColorScheme;
+  onClose: () => void;
+}) => {
   const videoSource = item.originalUrl;
-  console.log('Video source:', videoSource); // Debug log
+  console.log('Video source:', videoSource);
 
   const player = useVideoPlayer(videoSource, player => {
     player.loop = true;
@@ -39,36 +39,62 @@ const VideoItemComponent = ({ item, colorScheme }: { item: VideoItem; colorSchem
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
 
   return (
-    <View style={styles.videoContainer}>
-      <VideoView
-        player={player}
-        style={styles.video}
-        nativeControls
-        contentFit="contain"
-        allowsFullscreen
-        allowsPictureInPicture
-      />
-      <View style={styles.videoInfo}>
-        <Text style={[styles.videoTitle, { color: Colors[colorScheme].text }]}>
-          {item.title}
-        </Text>
-        <Button
-          title={isPlaying ? 'Pause' : 'Play'}
-          onPress={() => {
-            if (isPlaying) {
-              player.pause();
-            } else {
-              player.play();
-            }
-          }}
+    <View style={styles.videoPlayerOverlay}>
+      <View style={styles.videoPlayerContainer}>
+        <View style={styles.videoPlayerHeader}>
+          <Text style={[styles.videoTitle, { color: Colors[colorScheme].text }]}>
+            {item.filename}
+          </Text>
+          <Pressable onPress={onClose} style={styles.closeButton}>
+            <IconSymbol name="xmark.circle.fill" size={24} color={Colors[colorScheme].text} />
+          </Pressable>
+        </View>
+        <VideoView
+          player={player}
+          style={styles.videoPlayer}
+          nativeControls
+          contentFit="contain"
+          allowsFullscreen
+          allowsPictureInPicture
         />
+        <View style={styles.videoControls}>
+          <Button
+            title={isPlaying ? 'Pause' : 'Play'}
+            onPress={() => {
+              if (isPlaying) {
+                player.pause();
+              } else {
+                player.play();
+              }
+            }}
+          />
+        </View>
       </View>
     </View>
   );
 };
 
+const VideoThumbnail = ({ item, onSelect, colorScheme }: { 
+  item: VideoItem; 
+  onSelect: () => void;
+  colorScheme: ColorScheme;
+}) => (
+  <Pressable onPress={onSelect} style={styles.thumbnailContainer}>
+    <View style={styles.thumbnail}>
+      <IconSymbol name="play.circle.fill" size={32} color={Colors[colorScheme].text} />
+    </View>
+    <Text 
+      numberOfLines={1} 
+      style={[styles.thumbnailTitle, { color: Colors[colorScheme].text }]}
+    >
+      {item.filename}
+    </Text>
+  </Pressable>
+);
+
 export default function ProfileScreen() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const colorScheme = useColorScheme() as ColorScheme;
@@ -106,8 +132,12 @@ export default function ProfileScreen() {
     fetchUserVideos();
   }, [user]);
 
-  const renderVideo = ({ item }: { item: VideoItem }) => (
-    <VideoItemComponent item={item} colorScheme={colorScheme} />
+  const renderVideoThumbnail = ({ item }: { item: VideoItem }) => (
+    <VideoThumbnail
+      item={item}
+      onSelect={() => setSelectedVideo(item)}
+      colorScheme={colorScheme}
+    />
   );
 
   if (loading) {
@@ -118,68 +148,127 @@ export default function ProfileScreen() {
     );
   }
 
-  if (videos.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Text style={[styles.text, { color: Colors[colorScheme].text }]}>
-          No videos uploaded yet
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <Text style={[styles.header, { color: Colors[colorScheme].text }]}>
-        My Videos ({videos.length})
-      </Text>
-      <FlatList
-        data={videos}
-        renderItem={renderVideo}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-      />
+      <View style={styles.profileSection}>
+        <Text style={[styles.header, { color: Colors[colorScheme].text }]}>
+          Profile Section
+        </Text>
+        {/* Add profile content here */}
+      </View>
+      
+      <View style={styles.videosSection}>
+        <Text style={[styles.subheader, { color: Colors[colorScheme].text }]}>
+          My Videos ({videos.length})
+        </Text>
+        <FlatList
+          data={videos}
+          renderItem={renderVideoThumbnail}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.gridContainer}
+        />
+      </View>
+
+      {selectedVideo && (
+        <VideoPlayer
+          item={selectedVideo}
+          colorScheme={colorScheme}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
     </View>
   );
 }
 
+const { width } = Dimensions.get('window');
+const THUMBNAIL_SPACING = 12;
+const THUMBNAIL_WIDTH = (width - (THUMBNAIL_SPACING * 3)) / 2;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: 'transparent',
+  },
+  profileSection: {
+    padding: 16,
+    flex: 1,
+  },
+  videosSection: {
+    flex: 2,
+    padding: 16,
   },
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
   },
-  listContainer: {
-    gap: 16,
+  subheader: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 12,
   },
-  videoContainer: {
+  gridContainer: {
+    paddingHorizontal: THUMBNAIL_SPACING / 2,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    marginBottom: THUMBNAIL_SPACING,
+  },
+  thumbnailContainer: {
+    width: THUMBNAIL_WIDTH,
+    marginHorizontal: THUMBNAIL_SPACING / 2,
+  },
+  thumbnail: {
+    width: '100%',
+    aspectRatio: 16/9,
+    backgroundColor: '#ffffff10',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailTitle: {
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  videoPlayerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  videoPlayerContainer: {
     backgroundColor: '#ffffff10',
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
   },
-  video: {
-    width: '100%',
-    height: 200,
-  },
-  videoTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    padding: 12,
-  },
-  text: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  videoInfo: {
+  videoPlayerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
+  },
+  videoPlayer: {
+    width: '100%',
+    aspectRatio: 16/9,
+  },
+  videoControls: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  videoTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 8,
+  },
+  text: {
+    fontSize: 16,
+    textAlign: 'center',
   },
 }); 
