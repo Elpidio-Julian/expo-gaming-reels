@@ -103,10 +103,10 @@ const VideoPlayer = ({ item, colorScheme, onClose, viewMode }: {
       const idToken = await getIdToken(user);
       const apiUrl = process.env.EXPO_PUBLIC_FASTAPI_URL;
       
-      console.log('Attempting to connect to:', `${apiUrl}/api/v1/videos/process`);
+      console.log('Attempting to connect to:', `http://34.174.103.86/api/v1/videos/process`);
       console.log('With token:', idToken.substring(0, 10) + '...');
 
-      const response = await fetch(`${apiUrl}/api/v1/videos/process`, {
+      const response = await fetch(`http://34.174.103.86/api/v1/videos/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

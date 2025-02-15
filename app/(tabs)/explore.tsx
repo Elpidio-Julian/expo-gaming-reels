@@ -55,7 +55,7 @@ const VideoItem = ({ item, isVisible, isFocused }: {
   );
 };
 
-export default function ExploreScreen() {
+function ExploreScreen() {
   const [videos, setVideos] = useState<ProcessedVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -201,3 +201,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+
+export default ExploreScreen;

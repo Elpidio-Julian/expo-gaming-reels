@@ -40,7 +40,7 @@ yarn-error.*
 
 app-example
 
-firebaseConfig.ts
+firebaseConfig.js
 
 package-lock.json
 .cursor/
